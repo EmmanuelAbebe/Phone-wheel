@@ -194,7 +194,7 @@ function Center({ cfg, set, openSettings }) {
       </div>
       ${L.quickSliders && html`
         <label class="quick">Sensitivity
-          <input type="range" min="15" max="70" value=${cfg.steer.sensitivity} onInput=${(e) => set("steer.sensitivity", +e.target.value)} /></label>
+          <input type="range" min="-35" max="70" value=${cfg.steer.sensitivity} onInput=${(e) => set("steer.sensitivity", +e.target.value)} /></label>
         <label class="quick">Smoothing
           <input type="range" min="0" max="90" value=${cfg.steer.smoothing} onInput=${(e) => set("steer.smoothing", +e.target.value)} /></label>`}
     </div>`;
@@ -334,7 +334,7 @@ function SteeringTab({ cfg, set }) {
   return html`
     <h2>Steering</h2>
     <${LiveSteer} />
-    <${Slider} label="Sensitivity" hint=${`full lock at ${85 - s.sensitivity}° of tilt`} min="15" max="70" value=${s.sensitivity}
+    <${Slider} label="Sensitivity" hint=${`full lock at ${85 - s.sensitivity}° of tilt`} min="-35" max="70" value=${s.sensitivity}
       onInput=${(v) => set("steer.sensitivity", v)} />
     <${Slider} label="Smoothing" hint="0 = raw and twitchy, higher = calmer but laggier" min="0" max="90" value=${s.smoothing}
       onInput=${(v) => set("steer.smoothing", v)} />

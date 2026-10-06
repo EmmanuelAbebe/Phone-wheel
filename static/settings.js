@@ -48,7 +48,7 @@ export function sanitize(s) {
   const ids = BUTTONS.map((b) => b[0]);
   return {
     steer: {
-      sensitivity: num(st.sensitivity, D.steer.sensitivity, 15, 70),
+      sensitivity: num(st.sensitivity, D.steer.sensitivity, -35, 70),
       smoothing: num(st.smoothing, D.steer.smoothing, 0, 90),
       deadzone: num(st.deadzone, D.steer.deadzone, 0, 20),
       curve: num(st.curve, D.steer.curve, 0.3, 3),
