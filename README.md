@@ -4,7 +4,8 @@ Use your phone (tested layout for a Samsung Galaxy F23) as a tilt steering wheel
 
 ## Quick start with the app
 
-1. Run **PhoneWheel** (`PhoneWheel.exe` on Windows). A page with a QR code opens on the PC.
+1. Run **PhoneWheel** (`PhoneWheel.exe` on Windows). Its window shows a QR code (`--browser` also
+   opens a page with the code and live status at http://127.0.0.1:8444).
 2. Scan the QR code with the phone camera (same Wi-Fi). The phone is now paired; phones
    without the code can't connect. `--new-code` makes a fresh code and unpairs every phone.
 3. Accept the certificate warning once (Advanced → Proceed), tap **START DRIVING**.

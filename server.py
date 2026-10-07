@@ -615,6 +615,7 @@ def main():
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--pair-port", type=int, default=0, help="port for the QR code page on this PC (default: port + 1)")
     ap.add_argument("--no-browser", action="store_true", help="don't open the QR code page on this PC")
+    ap.add_argument("--browser", action="store_true", help="open the QR code page even when the terminal shows the QR code")
     ap.add_argument("--new-code", action="store_true", help="make a new pairing code (already paired phones must scan again)")
     ap.add_argument("--window", default="slowroads", help="keyboard mode: only send keys while the active window title contains this (spaces and punctuation ignored)")
     ap.add_argument("--any-window", action="store_true", help="keyboard mode: send keys no matter which window is in front")
@@ -645,14 +646,18 @@ def main():
     print(f"  Output mode : {out.name}")
     print(f"  Phone link  : {url}")
     print(f"  QR code page: {pair_url}\n")
+    qr_shown = False
     try:
         import qrcode
 
         qr = qrcode.QRCode(border=1)
         qr.add_data(url)
         qr.print_ascii(invert=True)
+        qr_shown = sys.stdout.isatty()
     except Exception:
         pass
+    # The QR code page is only needed when the terminal couldn't show the code.
+    open_page = args.browser or not (qr_shown or args.no_browser)
     print("  Scan the QR code with your phone camera (same Wi-Fi as this PC).")
     if not args.usb:
         print("  Your phone will warn about the certificate: tap Advanced -> Proceed.")
@@ -663,7 +668,7 @@ def main():
         await pair.setup()
         try:
             await web.TCPSite(pair, "127.0.0.1", pair_port).start()
-            if not args.no_browser:
+            if open_page:
                 threading.Thread(target=webbrowser.open, args=(pair_url,), daemon=True).start()
         except OSError as err:
             print(f"  (QR code page unavailable on port {pair_port}: {err.strerror})")

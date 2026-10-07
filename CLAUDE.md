@@ -21,7 +21,8 @@ Goal: use a Samsung Galaxy F23 as a tilt steering wheel for the browser game slo
 - Safety watchdog: everything is released if no message arrives for 0.4 s.
 - Pairing: random token (`pairing_token` in the data dir) is in the QR link `?t=`; `/ws` and `/check`
   reject other tokens. PC page with QR + live status: `pc/pair.html` on http://127.0.0.1:<port+1>
-  (localhost only, Host header checked), opened in the browser at start unless `--no-browser`.
+  (localhost only, Host header checked). Opened in the browser at start only if the terminal
+  couldn't print the QR code (or with `--browser`; `--no-browser` never opens it).
 - Packaging: `phone-wheel.spec` (PyInstaller, one file). Frozen builds read pages from `sys._MEIPASS`
   and keep cert/token in the user config dir (`data_dir()` in server.py); from source they stay next to server.py.
 
