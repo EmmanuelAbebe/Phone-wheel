@@ -65,6 +65,7 @@
       <div class="meter">Steer <div class="bar steer"><span id="bs"></span></div><output id="vs">—</output></div>
       <div class="meter">Gas <div class="bar gas"><span id="bg"></span></div><output id="vg">—</output></div>
       <div class="meter">Brake <div class="bar brake"><span id="bb"></span></div><output id="vb">—</output></div>
+      <div class="mode" id="linkq">Link: —</div>
       <div class="mode" id="mode"></div>
     </div>
   </div>
@@ -100,6 +101,9 @@
     } else {
       s.className = "status"; s.lastChild.textContent = "Waiting for the phone…";
     }
+    const lk = st && st.link;
+    $("linkq").textContent = lk ? `Link: ${lk.rtt ?? "–"} ms round trip · ${lk.hz} messages/s · longest pause ${lk.gap} ms`
+      + (lk.gap > 150 || (lk.rtt ?? 0) > 60 ? "  (laggy: try --usb, or keep the phone close to the router)" : "") : "Link: —";
     const inp = st && st.input;
     setBar("bs", inp ? inp.s : 0, true); setBar("bg", inp ? inp.g : 0); setBar("bb", inp ? inp.b : 0);
     $("vs").textContent = inp ? (inp.s >= 0 ? "+" : "") + inp.s.toFixed(2) : "—";

@@ -168,19 +168,34 @@ function Pedal({ kind, cfg }) {
     </div>`;
 }
 
+// "good · 9 ms · 60 Hz": round trip to the PC, messages per second it receives, and the worst stall if any.
+function linkText(l) {
+  if (!l.quality) return "";
+  if (l.quality === "stalled") return "stalled · no reply";
+  const stall = Math.max(l.gap, l.sendGap);
+  return `${l.quality} · ${l.rtt ?? "–"} ms · ${l.hz} Hz${stall > 100 ? ` · stall ${stall} ms` : ""}`;
+}
+
 function Center({ cfg, set, openSettings }) {
-  const wheel = useRef(), readout = useRef();
+  const wheel = useRef(), readout = useRef(), linkEl = useRef();
   const { connected, paired } = useLink();
+  let shown = "";
   useFrame(() => {
     const s = engine.state.steer;
     if (wheel.current) wheel.current.style.transform = `rotate(${s * 90}deg)`;
     if (readout.current) readout.current.textContent = `steer ${s >= 0 ? "+" : ""}${s.toFixed(2)}`;
+    const t = connected ? linkText(engine.link) : "";
+    if (linkEl.current && t !== shown) {
+      shown = t; linkEl.current.textContent = t; linkEl.current.className = `linkq ${engine.link.quality}`;
+      linkEl.current.title = `round trip ${engine.link.rtt ?? "–"} ms (worst of last 10: ${engine.link.rttMax ?? "–"} ms), PC receives ${engine.link.hz}/s, longest pause ${engine.link.gap} ms (PC) / ${engine.link.sendGap} ms (phone)`;
+    }
   });
   const L = cfg.layout;
   return html`
     <div class="center">
       <div class="topbar">
         <div class="status ${connected ? "ok" : ""}"><i></i>${connected ? "connected to PC" : paired === false ? "not paired: scan the PC's QR code" : "connecting…"}</div>
+        <div class="linkq" ref=${linkEl}></div>
         <button class="small" onClick=${openSettings}>⚙ Settings</button>
       </div>
       ${L.showWheel && html`<${Wheel} wheelRef=${wheel} />`}

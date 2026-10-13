@@ -38,6 +38,11 @@ button.big { font-size: 20px; padding: 14px 30px; }
 .status { font-size: 13px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .status i { width: 9px; height: 9px; border-radius: 50%; background: var(--brake); display: inline-block; }
 .status.ok i { background: var(--gas); }
+.linkq { font-size: 12px; font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 10px; color: var(--muted); white-space: nowrap; }
+.linkq:empty { display: none; }
+.linkq.good { color: #36d27f; background: rgba(54, 210, 127, .12); }
+.linkq.fair { color: #ffc21a; background: rgba(255, 194, 26, .14); }
+.linkq.poor, .linkq.stalled { color: #ff5b5b; background: rgba(255, 43, 43, .16); }
 .wheel { width: min(36vh, 26vw); height: min(36vh, 26vw); color: var(--text); transition: transform .03s linear; }
 .readout { font-variant-numeric: tabular-nums; font-size: 14px; color: var(--muted); }
 .aux { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 100%; }

@@ -19,6 +19,7 @@ let flipped = false, lastOrientation = 0;
 const held = new Map(); // on-screen button index -> bit it presses
 let buttonsKey = "";
 let ws = null, started = false;
+const PING_EVERY = 500; // ms between round-trip probes
 const statusListeners = new Set();
 
 export function setConfig(c) {
@@ -98,11 +99,49 @@ function onMotion(e) {
   updateSteer(g.x, g.y, Math.min(follow, 0.35)); // accelerometer is noisy, always smooth it some
 }
 
+// ---------- link quality
+// Every PING_EVERY ms an input message carries `p` (a sequence number); the server answers {pong, hz, gap}
+// at once, so the round trip is measured on the same socket and path as the steering. hz = messages the server
+// received in the last second, gap = the longest pause between them in the last 5 s (Wi-Fi stalls show up there).
+// `r` (our latest round trip) rides along so the PC page can show it too.
+export const link = { rtt: null, rttMax: null, hz: 0, gap: 0, sendGap: 0, quality: "" };
+const pingSent = new Map(), rtts = [], sendTimes = [];
+let pingSeq = 0, lastPing = 0, lastPong = 0;
+
+function grade() {
+  if (!state.connected) return "";
+  if (performance.now() - lastPong > 2000 && lastPing - lastPong > 1500) return "stalled";
+  const r = link.rtt ?? 999, gap = Math.max(link.gap, link.sendGap);
+  return r <= 25 && gap <= 60 ? "good" : r <= 60 && gap <= 150 ? "fair" : "poor";
+}
+function onPong(d, now) {
+  const sent = pingSent.get(d.pong);
+  if (sent === undefined) return;
+  for (const k of pingSent.keys()) if (k <= d.pong) pingSent.delete(k);
+  rtts.push(now - sent); if (rtts.length > 10) rtts.shift();
+  const sorted = [...rtts].sort((a, b) => a - b);
+  link.rtt = Math.round(sorted[sorted.length >> 1]);
+  link.rttMax = Math.round(sorted[sorted.length - 1]);
+  link.hz = d.hz || 0; link.gap = d.gap || 0;
+  lastPong = now;
+}
+// Longest pause between our own sends in the last 2 s: Android slows timers when the page is throttled.
+function noteSend(now) {
+  sendTimes.push(now);
+  while (sendTimes.length && now - sendTimes[0] > 2000) sendTimes.shift();
+  let g = 0; for (let i = 1; i < sendTimes.length; i++) g = Math.max(g, sendTimes[i] - sendTimes[i - 1]);
+  link.sendGap = Math.round(g);
+}
+
 // ---------- connection
 function connect() {
   const t = encodeURIComponent(token);
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws?t=${t}`);
-  ws.onopen = () => setLink(true, true);
+  ws.onopen = () => { rtts.length = 0; pingSent.clear(); link.rtt = link.rttMax = null; lastPong = performance.now(); setLink(true, true); };
+  ws.onmessage = (e) => {
+    let d = null; try { d = JSON.parse(e.data); } catch (_) { return; }
+    if (d && typeof d.pong === "number") onPong(d, performance.now());
+  };
   ws.onclose = async () => {
     // A browser can't see why a WebSocket failed, so ask whether the pairing code is the problem.
     let paired = null;
@@ -122,12 +161,19 @@ export function start() {
   setInterval(() => {
     if (!ws || ws.readyState !== 1) return;
     const p = state.paused; // settings open: pedals and buttons are let go, steering stays live
-    ws.send(JSON.stringify({
+    const now = performance.now(), msg = {
       s: +state.steer.toFixed(3),
       g: p ? 0 : +state.gas.toFixed(3),
       b: p ? 0 : +state.brake.toFixed(3),
       k: p ? 0 : keys(),
-    }));
+    };
+    if (now - lastPing >= PING_EVERY) {
+      msg.p = ++pingSeq; pingSent.set(pingSeq, now); lastPing = now;
+      if (link.rtt !== null) msg.r = link.rtt;
+    }
+    ws.send(JSON.stringify(msg));
+    noteSend(now);
+    link.quality = grade();
   }, 16);
   setTimeout(center, 400); // treat the starting position as center
 }

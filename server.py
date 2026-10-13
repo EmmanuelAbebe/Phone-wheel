@@ -16,6 +16,7 @@ Connection:
 """
 import argparse
 import asyncio
+import collections
 import datetime
 import hmac
 import os
@@ -459,12 +460,17 @@ def build_app(out, token, status):
             return web.Response(status=403, text="not paired")
         ws = web.WebSocketResponse(heartbeat=5)
         await ws.prepare(req)
+        arrivals = collections.deque()  # receive times of the last 5 s, for rate and stall stats
         status["phones"] += 1
         print(f"\n  Phone connected ({req.remote})")
         try:
             async for msg in ws:
                 if msg.type != WSMsgType.TEXT:
                     continue
+                now = time.monotonic()
+                arrivals.append(now)
+                while now - arrivals[0] > 5:
+                    arrivals.popleft()
                 try:
                     d = json.loads(msg.data)
                     s = clamp(float(d.get("s", 0)), -1.0, 1.0)
@@ -473,11 +479,20 @@ def build_app(out, token, status):
                     k = int(d.get("k", 0)) & BUTTON_MASK
                 except (ValueError, TypeError):
                     continue
-                state.update(s=s, g=g, b=b, k=k, t=time.monotonic())
+                state.update(s=s, g=g, b=b, k=k, t=now)
                 status["input"] = state
                 out.apply(s, g, b, k)
+                if "p" in d:
+                    # link probe: answer at once so the phone can time the round trip; include what we see
+                    hz = sum(1 for a in arrivals if now - a <= 1)
+                    gap = max((b2 - a2 for a2, b2 in zip(arrivals, list(arrivals)[1:])), default=0)
+                    rtt = d.get("r")
+                    status["link"] = {"rtt": rtt if isinstance(rtt, (int, float)) else None,
+                                      "hz": hz, "gap": round(gap * 1000), "t": now}
+                    await ws.send_str(json.dumps({"pong": d["p"], "hz": hz, "gap": round(gap * 1000)}))
         finally:
             status["phones"] -= 1
+            status["link"] = {}
             state.update(s=0.0, g=0.0, b=0.0, k=0)
             out.apply(0, 0, 0)
             print("\n  Phone disconnected - controls released")
@@ -536,7 +551,9 @@ def build_pair_app(info, status):
     async def api_status(_req):
         fresh = time.monotonic() - status["input"].get("t", 0) < 0.5
         inp = {k: status["input"].get(k, 0) for k in ("s", "g", "b", "k")} if fresh else None
-        return web.json_response({"phones": status["phones"], "input": inp},
+        lk = status.get("link") or {}
+        link = {k: lk.get(k) for k in ("rtt", "hz", "gap")} if time.monotonic() - lk.get("t", 0) < 2 else None
+        return web.json_response({"phones": status["phones"], "input": inp, "link": link},
                                  headers={"Cache-Control": "no-store"})
 
     app = web.Application(middlewares=[local_only])

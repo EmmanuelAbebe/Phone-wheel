@@ -10,3 +10,6 @@ build/
 .venv/
 __pycache__/
 node_modules/
+
+# local Python virtualenv
+venv/
