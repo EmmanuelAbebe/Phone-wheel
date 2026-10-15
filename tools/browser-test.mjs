@@ -14,8 +14,8 @@ const page = await ctx.newPage();
 const errors = [];
 page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.text()); });
 page.on("pageerror", (e) => errors.push("PAGEERROR " + e.message));
-let last = null;
-page.on("websocket", (ws) => ws.on("framesent", (f) => { try { last = JSON.parse(f.payload); } catch (_) {} }));
+let last = null, sent = [];
+page.on("websocket", (ws) => ws.on("framesent", (f) => { try { last = JSON.parse(f.payload); sent.push(last); } catch (_) {} }));
 const wait = (ms) => page.waitForTimeout(ms);
 // Portrait-angle tilt: theta degrees clockwise (steer right) -> beta = 90 - theta, gamma = 90.
 const tilt = (theta, n = 40) => page.evaluate(async ([t, n]) => {
@@ -53,6 +53,32 @@ await page.mouse.down(); await wait(100);
 check("button 1 -> A (k=1)", last && last.k === 1, JSON.stringify(last));
 await page.mouse.up(); await wait(100);
 check("button released (k=0)", last && last.k === 0);
+
+// flick to shift: on the brake (left) flick right = LB (bit 4 = 16), twice = two separate presses; on the gas
+// (right) flick left = RB (32); the pedal stays pressed; a slow slide does nothing
+const presses = (bit) => sent.reduce((n, m, i) => n + ((m.k & bit) && !(i && sent[i - 1].k & bit) ? 1 : 0), 0);
+const flick = async (box, dir, times = 1, steps = 4) => {
+  const x0 = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x0, y); await page.mouse.down(); await wait(120);
+  for (let n = 0; n < times; n++) {
+    await page.mouse.move(x0 + dir * 70, y, { steps }); await wait(steps > 10 ? 0 : 60);
+    await page.mouse.move(x0, y, { steps: 40 }); await wait(250);   // slow return: not a flick
+  }
+};
+const brakeBox = await page.locator(".pedal.brake").boundingBox();
+sent = []; await flick(brakeBox, +1, 2);
+check("flick on brake -> 2 × LB, brake held", presses(16) === 2 && presses(32) === 0 && last.b > 0, `LB=${presses(16)} b=${last.b}`);
+await page.mouse.up(); await wait(100);
+sent = []; await flick(gas, -1);
+check("flick on gas -> RB", presses(32) === 1 && presses(16) === 0, `RB=${presses(32)}`);
+await page.mouse.up(); await wait(100);
+sent = []; await flick(brakeBox, -1);
+check("flick away from the centre does nothing", presses(16) + presses(32) === 0);
+await page.mouse.up(); await wait(100);
+sent = []; await flick(brakeBox, +1, 1, 40);
+check("slow sideways slide does nothing", presses(16) + presses(32) === 0);
+await page.mouse.up(); await wait(150);
+await page.screenshot({ path: `${OUT}/2b-flick.png` });
 
 // settings
 await page.click("text=⚙ Settings");

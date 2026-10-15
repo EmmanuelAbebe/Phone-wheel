@@ -1,5 +1,5 @@
 import { html, render, useState, useEffect, useRef } from "./vendor/preact-htm.js";
-import { BUTTONS, KEYBOARD_KEYS, MAX_BUTTONS, DEFAULTS, clone, sanitize, loadStore, saveStore, pedalValue, steerCurve } from "./settings.js";
+import { BUTTONS, KEYBOARD_KEYS, MAX_BUTTONS, DEFAULTS, clone, sanitize, loadStore, saveStore, pedalValue, steerCurve, createFlick } from "./settings.js";
 import * as engine from "./engine.js";
 
 let haptics = true;
@@ -109,19 +109,29 @@ function Drive({ cfg, set, openSettings }) {
   const [left, right] = L.swapPedals ? ["gas", "brake"] : ["brake", "gas"];
   return html`
     <div class="drive" style=${{ gridTemplateColumns: `${L.pedalSize}fr 1.1fr ${L.pedalSize}fr` }}>
-      <${Pedal} key=${left} kind=${left} cfg=${cfg[left]} />
+      <${Pedal} key=${left} kind=${left} cfg=${cfg[left]} flick=${cfg.flick} toCenter=${1} />
       <${Center} cfg=${cfg} set=${set} openSettings=${openSettings} />
-      <${Pedal} key=${right} kind=${right} cfg=${cfg[right]} />
+      <${Pedal} key=${right} kind=${right} cfg=${cfg[right]} flick=${cfg.flick} toCenter=${-1} />
     </div>`;
 }
 
 const PEDAL_HINT = { ramp: "hold longer = harder", slide: "slide up = harder", instant: "full on touch" };
 
-function Pedal({ kind, cfg }) {
-  const el = useRef(), fill = useRef();
+// toCenter: +1 for the left pedal, -1 for the right (the direction of a flick toward the screen centre).
+function Pedal({ kind, cfg, flick, toCenter }) {
+  const el = useRef(), fill = useRef(), mark = useRef();
   const st = useRef({ pid: null, t0: 0, y: 0 });
-  const cfgRef = useRef(cfg);
-  cfgRef.current = cfg;
+  const cfgRef = useRef(cfg), flickRef = useRef(flick), flicker = useRef(createFlick());
+  cfgRef.current = cfg; flickRef.current = flick;
+  // flick to shift: brake = down, gas = up; the pedal stays pressed (a flick is sideways, pressure is up/down or time)
+  const shift = kind === "brake" ? "down" : "up";
+  const flicked = () => {
+    engine.tap(flickRef.current[shift]);
+    buzz(35);
+    const m = mark.current;
+    if (m) { m.classList.remove("show"); void m.offsetWidth; m.classList.add("show"); }
+  };
+  const track = (e) => { if (flickRef.current.on && flicker.current.add(e.clientX, e.clientY, performance.now(), toCenter, flickRef.current)) flicked(); };
 
   const put = (v) => {
     engine.state[kind] = v;
@@ -152,19 +162,21 @@ function Pedal({ kind, cfg }) {
     const s = st.current;
     if (s.pid !== null) return;
     s.pid = e.pointerId; s.t0 = performance.now(); s.y = e.clientY;
+    flicker.current.reset(); track(e);
     el.current.setPointerCapture(s.pid);
     el.current.classList.add("active");
     buzz(12);
     tick();
   };
-  const move = (e) => { if (e.pointerId === st.current.pid) st.current.y = e.clientY; };
+  const move = (e) => { if (e.pointerId === st.current.pid) { st.current.y = e.clientY; track(e); } };
   const up = (e) => { if (e.pointerId === st.current.pid) release(); };
 
   return html`
     <div class="pedal ${kind}" ref=${el} onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}>
       <div class="fill" ref=${fill}></div>
       <div class="label">${kind === "gas" ? "GAS" : "BRAKE"}</div>
-      <div class="hint">${PEDAL_HINT[cfg.mode]}</div>
+      <div class="hint">${PEDAL_HINT[cfg.mode]}${flick.on ? html`<br/>flick ${toCenter > 0 ? "→" : "←"} = shift ${shift}` : ""}</div>
+      <div class="shiftmark" ref=${mark}>${shift === "up" ? "▲" : "▼"}</div>
     </div>`;
 }
 
@@ -386,7 +398,27 @@ function PedalsTab({ cfg, set }) {
         <${CurvePreview} fn=${(x) => pedalValue(x, p)} caption=${p.mode === "ramp" ? "hold time → pressure" : "thumb height → pressure"} />
       </div>`}
     <${Slider} label="Maximum" hint="cap the pedal below full" min="0.1" max="1" step="0.05" value=${p.max}
-      onInput=${(v) => set(k + "max", v)} fmt=${(v) => Math.round(v * 100) + "%"} />`;
+      onInput=${(v) => set(k + "max", v)} fmt=${(v) => Math.round(v * 100) + "%"} />
+    <h2>Flick to shift</h2>
+    <${Toggle} label="Flick to shift" hint="while on a pedal, flick your thumb toward the middle: brake = shift down, gas = shift up"
+      value=${cfg.flick.on} onChange=${(v) => set("flick.on", v)} />
+    ${cfg.flick.on && html`
+      <${Slider} label="Flick distance" hint="how far the thumb must move; more = fewer accidental shifts" min="15" max="120" value=${cfg.flick.distance}
+        onInput=${(v) => set("flick.distance", v)} fmt=${(v) => v + " px"} />
+      <${Slider} label="Flick speed" hint="the distance has to happen within this time" min="80" max="400" step="10" value=${cfg.flick.time}
+        onInput=${(v) => set("flick.time", v)} fmt=${(v) => v + " ms"} />
+      <${FlickBind} label="Shift down sends" value=${cfg.flick.down} onChange=${(v) => set("flick.down", v)} />
+      <${FlickBind} label="Shift up sends" value=${cfg.flick.up} onChange=${(v) => set("flick.up", v)} />`}`;
+}
+
+function FlickBind({ label, value, onChange }) {
+  return html`
+    <label class="field">
+      <span class="name">${label}<small>Gridline GP shifts on LB / RB (or A / B)</small></span>
+      <select value=${value} onChange=${(e) => onChange(e.target.value)}>
+        ${BUTTONS.map(([id, name]) => html`<option value=${id}>${name}</option>`)}
+      </select>
+    </label>`;
 }
 
 function ButtonsTab({ cfg, set }) {

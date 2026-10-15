@@ -21,6 +21,9 @@ export const DEFAULTS = {
     { label: "2", bind: "B", toggle: false },
     { label: "3", bind: "X", toggle: false },
   ],
+  // flick a thumb sideways toward the screen centre while on a pedal to shift: brake = down, gas = up
+  // (`distance` px within `time` ms, mostly sideways); each flick taps the bound button once
+  flick: { on: true, distance: 40, time: 160, down: "LB", up: "RB" },
   layout: { swapPedals: false, pedalSize: 1, buttonSize: "m", showWheel: true, quickSliders: true, haptics: true },
 };
 
@@ -44,7 +47,7 @@ function pedal(p, d) {
 // Fill in anything missing or out of range, so old or hand-edited profiles always load.
 export function sanitize(s) {
   s = s || {};
-  const D = DEFAULTS, st = s.steer || {}, l = s.layout || {};
+  const D = DEFAULTS, st = s.steer || {}, l = s.layout || {}, f = s.flick || {};
   const ids = BUTTONS.map((b) => b[0]);
   return {
     steer: {
@@ -61,6 +64,13 @@ export function sanitize(s) {
       bind: pick(b && b.bind, ids, "A"),
       toggle: bool(b && b.toggle, false),
     })),
+    flick: {
+      on: bool(f.on, D.flick.on),
+      distance: num(f.distance, D.flick.distance, 15, 120),
+      time: num(f.time, D.flick.time, 80, 400),
+      down: pick(f.down, ids, D.flick.down),
+      up: pick(f.up, ids, D.flick.up),
+    },
     layout: {
       swapPedals: bool(l.swapPedals, D.layout.swapPedals),
       pedalSize: num(l.pedalSize, D.layout.pedalSize, 0.6, 1.6),
@@ -111,4 +121,24 @@ export function steerCurve(v, c) {
   const a = Math.abs(v), dz = c.deadzone / 100;
   if (a <= dz) return 0;
   return Math.sign(v) * Math.pow((a - dz) / (1 - dz), c.curve);
+}
+
+// ---------- flick to shift
+// One pointer's recent positions -> true when it has just moved `distance` px toward `dir` (+1 right, -1 left)
+// within `time` ms, at least twice as far sideways as up/down. After a flick the history restarts, so the thumb
+// can come back and flick again.
+export function createFlick() {
+  let pts = [];
+  return {
+    reset() { pts = []; },
+    add(x, y, t, dir, c) {
+      pts.push({ x, y, t });
+      while (pts.length && t - pts[0].t > c.time) pts.shift();
+      for (const p of pts) {
+        const dx = (x - p.x) * dir, dy = Math.abs(y - p.y);
+        if (dx >= c.distance && dx >= 2 * dy) { pts = [{ x, y, t }]; return true; }
+      }
+      return false;
+    },
+  };
 }

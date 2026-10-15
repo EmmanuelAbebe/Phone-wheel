@@ -59,6 +59,7 @@ pyinstaller phone-wheel.spec                                 # -> dist/PhoneWhee
 | Tilt left/right | Steer (analog) |
 | Right pedal | Gas (RT) |
 | Left pedal | Brake (LT) |
+| Flick toward the middle while on brake / gas | Shift down / up: one tap of LB / RB (change in Settings → Pedals) |
 | On-screen buttons | Any Xbox button or D-pad direction you bind them to (keys `1`…`9` `0` `-` in keyboard mode) |
 | **Center** | Makes the current tilt "straight ahead" |
 | **⚙ Settings** | Everything below |

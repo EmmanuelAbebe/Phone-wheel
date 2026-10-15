@@ -44,9 +44,22 @@ export function setButton(index, down) {
   if (down && cfg.buttons[index]) held.set(index, bitOf(cfg.buttons[index].bind));
   else held.delete(index);
 }
+// Button taps (flick to shift): each is held PULSE_MS so the PC's game sees it for several frames; taps of the same
+// button in quick succession are spaced PULSE_GAP_MS apart so each one is a separate press.
+const PULSE_MS = 80, PULSE_GAP_MS = 50;
+let pulses = []; // { bit, start, end }
+export function tap(id) {
+  const bit = bitOf(id), now = performance.now();
+  const last = pulses.filter((p) => p.bit === bit).reduce((m, p) => Math.max(m, p.end), -Infinity);
+  const start = Math.max(now, last + PULSE_GAP_MS);
+  pulses.push({ bit, start, end: start + PULSE_MS });
+}
 function keys() {
   let k = 0;
   for (const bit of held.values()) k |= 1 << bit;
+  const now = performance.now();
+  pulses = pulses.filter((p) => p.end > now);
+  for (const p of pulses) if (p.start <= now) k |= 1 << p.bit;
   return k;
 }
 

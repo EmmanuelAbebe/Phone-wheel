@@ -12,6 +12,9 @@ Goal: use a Samsung Galaxy F23 as a tilt steering wheel for the browser game slo
   `static/app.js` = UI. Old single-file page kept at `/classic` (`static/classic.html`).
 - The phone sends `{s, g, b, k}` (steer -1..1, gas 0..1, brake 0..1, button bitmask) over a WebSocket at ~60 Hz.
   Bit i of `k` = `BUTTON_NAMES[i]` in server.py = `BUTTONS[i]` in settings.js (A B X Y LB RB BACK START GUIDE LS RS UP DOWN LEFT RIGHT).
+- Flick to shift (`settings.js` `flick` + `createFlick`, `Pedal` in app.js): a thumb on a pedal flicked toward the
+  screen centre (≥ distance px within time ms, ≥ 2× sideways) taps a button via `engine.tap(id)` (held 80 ms, repeats
+  spaced 50 ms apart): brake = down (LB), gas = up (RB), which Gridline GP uses as paddles. Pedal value is unaffected.
 - Browser check: `tools/browser-test.mjs` (Playwright vs `server.py --dry-run --port 8450`, steps in its header).
 - Output backends in `server.py`:
   - `GamepadOut` (default on Windows): virtual Xbox 360 pad through `vgamepad`/ViGEmBus.
